@@ -85,7 +85,10 @@ local function apply_char_highlight(bufnr, char_range, hl_group, lines)
   end
 
   if is_past_line_content(start_line, start_col, lines) then
-    return
+    if start_line >= end_line then
+      return
+    end
+    start_line, start_col = start_line + 1, 1
   end
 
   -- Convert UTF-16 column positions to byte positions for Neovim

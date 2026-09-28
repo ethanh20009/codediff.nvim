@@ -157,6 +157,36 @@ describe("Render Core", function()
     vim.api.nvim_buf_delete(right_buf, {force = true})
   end)
 
+  it("Renders multi-line character changes that start at a line break", function()
+    local left_buf = vim.api.nvim_create_buf(false, true)
+    local right_buf = vim.api.nvim_create_buf(false, true)
+
+    local original = {"foo bar"}
+    local modified = {"foo", "baz bar"}
+
+    vim.api.nvim_buf_set_lines(left_buf, 0, -1, false, original)
+    vim.api.nvim_buf_set_lines(right_buf, 0, -1, false, modified)
+
+    local lines_diff = diff.compute_diff(original, modified)
+    core.render_diff(left_buf, right_buf, original, modified, lines_diff)
+
+    local char_marks = {}
+    local right_marks = vim.api.nvim_buf_get_extmarks(right_buf, highlights.ns_highlight, 0, -1, {details = true})
+    for _, mark in ipairs(right_marks) do
+      if mark[4].hl_group == "CodeDiffCharInsert" then
+        table.insert(char_marks, mark)
+      end
+    end
+
+    assert.equal(1, #char_marks, "The inserted 'baz' should have one character highlight")
+    assert.equal(1, char_marks[1][2])
+    assert.equal(0, char_marks[1][3])
+    assert.equal(3, char_marks[1][4].end_col)
+
+    vim.api.nvim_buf_delete(left_buf, {force = true})
+    vim.api.nvim_buf_delete(right_buf, {force = true})
+  end)
+
   -- Test 6: Empty diff (no changes)
   it("Handles empty diff with no changes gracefully", function()
     local left_buf = vim.api.nvim_create_buf(false, true)
