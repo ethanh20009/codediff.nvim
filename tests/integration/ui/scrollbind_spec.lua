@@ -94,4 +94,43 @@ describe("native scrollbind", function()
 
     assert.is_true(max_backjump <= 1, "native scrollbind must not oscillate; max backward jump was " .. max_backjump)
   end)
+
+  it("realigns the opposite pane when scrolling through a filler block taller than the window", function()
+    local left = make_window(make_content("C", 60), 30)
+    vim.cmd("rightbelow vsplit")
+    local right_lines = make_content("C", 20)
+    for i = 1, 30 do
+      right_lines[#right_lines + 1] = string.format("I%03d", i)
+    end
+    for i = 21, 60 do
+      right_lines[#right_lines + 1] = string.format("C%03d", i)
+    end
+    local right = make_window(right_lines)
+
+    local tabpage = vim.api.nvim_get_current_tabpage()
+    local session = { layout = "side-by-side", original_win = left, modified_win = right }
+    local scroll_sync = require("codediff.ui.view.scroll_sync")
+    scroll_sync.attach(tabpage, vim.api.nvim_create_augroup("scrollbind_test_sync", { clear = true }), function()
+      return session
+    end)
+
+    vim.wo[left].scrollbind = true
+    vim.wo[right].scrollbind = true
+    vim.api.nvim_set_current_win(right)
+    vim.cmd("syncbind")
+
+    local left_toplines = {}
+    for _ = 1, 45 do
+      vim.api.nvim_feedkeys("\5", "nx", false)
+      vim.api.nvim_exec_autocmds("WinScrolled", {})
+      left_toplines[#left_toplines + 1] = vim.api.nvim_win_call(left, vim.fn.winsaveview).topline
+    end
+    pcall(vim.api.nvim_del_augroup_by_name, "scrollbind_test_sync")
+
+    for step = 2, #left_toplines do
+      assert.is_true(left_toplines[step] >= left_toplines[step - 1], "opposite pane jumped backwards at step " .. step)
+    end
+    assert.equals(21, left_toplines[30], "opposite pane holds the line below the filler while it cannot fit")
+    assert.equals(scroll_sync.top_row(right), scroll_sync.top_row(left))
+  end)
 end)

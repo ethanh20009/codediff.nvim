@@ -181,6 +181,10 @@ function M.create_session(tabpage, session_config, panes)
     end
   end
 
+  require("codediff.ui.view.scroll_sync").attach(tabpage, tab_augroup, function(tab)
+    return active_diffs[tab]
+  end)
+
   vim.api.nvim_create_autocmd({ "BufWinEnter", "BufEnter", "WinEnter", "FileType" }, {
     group = tab_augroup,
     callback = function()
