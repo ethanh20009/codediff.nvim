@@ -79,13 +79,13 @@ function M.compute_visible_lines(changes, side, line_count, context_lines)
     local range_start = range.start_line
     local range_end = range.end_line -- exclusive
 
-    -- For zero-width ranges (pure insertion/deletion), use start_line as anchor
-    if range_start == range_end then
-      range_end = range_start + 1
-    end
+    -- A zero-width range (pure insertion/deletion) sits between two lines, so it
+    -- gets the same context as its other side: N lines above and N below. Keep
+    -- the line below visible as an anchor when there is no context at all.
+    local last_line = math.max(range_end - 1 + context_lines, range_start == range_end and range_start or 0)
 
     local ctx_start = math.max(1, range_start - context_lines)
-    local ctx_end = math.min(line_count, range_end - 1 + context_lines)
+    local ctx_end = math.min(line_count, last_line)
     for l = ctx_start, ctx_end do
       visible[l] = true
     end

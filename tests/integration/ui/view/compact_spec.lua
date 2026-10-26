@@ -157,16 +157,36 @@ describe("compact mode (#344)", function()
       assert.is_nil(visible[11], "buffer only has 10 lines")
     end)
 
-    it("treats zero-width ranges (pure insertion/deletion) as a one-line anchor", function()
-      -- Zero-width range at line 5 — gets treated as the one-line slice [5,6).
-      -- With context=2: visible = max(1, 5-2)..min(N, 6-1+2) = 3..7.
+    it("gives zero-width ranges (pure insertion/deletion) the same context on both sides", function()
+      -- Zero-width range before line 5 with context=2: lines 3-4 above, 5-6 below.
       local changes = { make_change(5, 5, 5, 8) }
       local visible = compact.compute_visible_lines(changes, "original", 100, 2)
-      for l = 3, 7 do
+      for l = 3, 6 do
         assert.is_true(visible[l], "line " .. l .. " should be visible")
       end
       assert.is_nil(visible[2])
-      assert.is_nil(visible[8])
+      assert.is_nil(visible[7])
+    end)
+
+    it("keeps the line below a zero-width range visible with zero context", function()
+      local changes = { make_change(5, 5, 5, 8) }
+      local visible = compact.compute_visible_lines(changes, "original", 100, 0)
+      assert.same({ [5] = true }, visible)
+    end)
+
+    it("folds the same number of unchanged lines on both sides around a pure insertion", function()
+      -- Insertion of 2 lines before original line 20, then a one-line change at original 40.
+      local changes = { make_change(20, 20, 20, 22), make_change(40, 41, 42, 43) }
+      local orig_visible = compact.compute_visible_lines(changes, "original", 60, 3)
+      local mod_visible = compact.compute_visible_lines(changes, "modified", 62, 3)
+      local function folded_between(visible, first, last)
+        local count = 0
+        for l = first, last do
+          count = count + (visible[l] and 0 or 1)
+        end
+        return count
+      end
+      assert.equals(folded_between(orig_visible, 20, 40), folded_between(mod_visible, 22, 42))
     end)
 
     it("merges overlapping hunks' visible ranges via set union", function()
