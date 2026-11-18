@@ -143,13 +143,13 @@ end
 M.merge_rows = {
   original = { "  before", "╭─base1", "│ THEIRS2", "│ ╱╱╱╱", "╰─THEIRS3", "  after", "  tail" },
   modified = { "  before", "╭─OURS1", "│ inserted", "│ OURS2", "╰─base3", "  after", "  tail" },
-  result = { "  before", "╭─base1", "│ base2", "╰─base3", "  after", "  tail" },
+  result = { "  before", "╭─base1", "│ base2", "╰─base3", "  ╱╱╱╱╱", "  after", "  tail" },
 }
 
 M.other_merge_rows = {
   original = { "  beforeB", "╭─THEIRS_B", "╰─extraB", "  afterB" },
   modified = { "  beforeB", "╭─╱╱╱╱", "╰─OURS_B", "  afterB" },
-  result = { "  beforeB", "[ baseB", "  afterB" },
+  result = { "  beforeB", "[ baseB", "  ╱╱╱╱╱╱", "  afterB" },
 }
 
 return M

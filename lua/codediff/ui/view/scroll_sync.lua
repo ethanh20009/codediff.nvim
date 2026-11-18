@@ -50,7 +50,7 @@ function M.view_for_row(win, row)
   if topfill > filler_above(win, low) then
     return { topline = math.max(low - 1, 1), topfill = 0 }
   end
-  return { topline = low, topfill = math.min(topfill, api.nvim_win_get_height(win) - 1) }
+  return { topline = low, topfill = math.min(topfill, vim.fn.winheight(win) - 1) }
 end
 
 local function bound_panes(sess)
@@ -80,15 +80,57 @@ local function scrolled_source(original_win, modified_win)
   end
 end
 
-function M.align(original_win, modified_win, source)
-  local target = source == original_win and modified_win or original_win
+--- Re-anchor 'scrollbind' at the window's current view. A view changed by anything other than
+--- a bound scroll (winrestview, a resize) leaves a stale anchor, and the 'jump' flag of
+--- 'scrollopt' then scrolls the other panes by the difference when the window is entered.
+function M.reset_scrollbind_anchor(win)
+  api.nvim_win_call(win, function()
+    if vim.wo.scrollbind then
+      vim.wo.scrollbind = false
+      vim.wo.scrollbind = true
+    end
+  end)
+end
+
+--- Scroll `target` so its first screen row lines up with the first screen row of `source`.
+function M.align(source, target)
   local view = M.view_for_row(target, M.top_row(source))
   local current = api.nvim_win_call(target, vim.fn.winsaveview)
   if current.topline ~= view.topline or current.topfill ~= view.topfill then
     api.nvim_win_call(target, function()
       vim.fn.winrestview(view)
     end)
+    M.reset_scrollbind_anchor(target)
   end
+end
+
+--- First and last rows of `win` the cursor can sit on without scrolling, given 'scrolloff'.
+local function cursor_safe_rows(win)
+  local top = M.top_row(win)
+  local height = vim.fn.winheight(win)
+  local margin = math.min(vim.wo[win].scrolloff, math.floor((height - 1) / 2))
+  return top + margin, top + height - 1 - margin
+end
+
+--- The line nearest `row` whose text sits on a row the cursor can use without scrolling.
+--- A row inside filler belongs to no line, so prefer the line above the filler when the
+--- line below it is out of reach.
+local function cursor_line_near_row(win, row)
+  local first, last = cursor_safe_rows(win)
+  row = math.max(first, math.min(row, last))
+  local line = M.view_for_row(win, row).topline
+  if text_row(win, line) > last and line > 1 and text_row(win, line - 1) >= first then
+    return line - 1
+  end
+  return line
+end
+
+--- Align `target` with `source` and put its cursor as close as it can to the row of the source
+--- cursor while staying in view, so entering `target` does not scroll it to its old cursor.
+function M.align_with_cursor(source, target)
+  M.align(source, target)
+  local source_cursor_row = text_row(source, api.nvim_win_get_cursor(source)[1])
+  api.nvim_win_set_cursor(target, { cursor_line_near_row(target, source_cursor_row), 0 })
 end
 
 --- Correct the opposite pane after every scroll in a side-by-side session.
@@ -105,7 +147,7 @@ function M.attach(tabpage, augroup, get_session)
       end
       local source = scrolled_source(original_win, modified_win)
       if source then
-        M.align(original_win, modified_win, source)
+        M.align(source, source == original_win and modified_win or original_win)
       end
     end,
   })

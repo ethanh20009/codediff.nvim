@@ -177,6 +177,7 @@ function M.setup_refresh_autocmd(tabpage, result_bufnr)
     callback = function()
       local session = lifecycle.get_session(tabpage)
       if session and not session.suspended and session.result_bufnr == result_bufnr then
+        require("codediff.ui.conflict.view.result").pad(session)
         M.refresh(session)
       end
     end,

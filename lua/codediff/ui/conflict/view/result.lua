@@ -46,6 +46,7 @@ function M.set_inputs(session, base_lines, diffs)
   )
   require("codediff.ui.view.helpers").set_lines(session.result_bufnr, lines)
   session.result_base_lines, session.merge_base_lines, session.conflict_blocks = lines, base_lines, blocks
+  session.merge_input_diffs = diffs
   require("codediff.ui.conflict").initialize_tracking(session.result_bufnr, blocks)
 end
 
@@ -59,7 +60,43 @@ function M.render(session)
   if result then
     require("codediff.ui.core").render_single_buffer(session.result_bufnr, result, "modified")
   end
+  M.pad(session, lines)
   require("codediff.ui.conflict").refresh(session)
+end
+
+--- Pad the three panes so Result's lines stay on the same screen rows as the inputs.
+--- @param lines string[]? Current Result lines, read from the buffer when omitted
+function M.pad(session, lines)
+  if not (session.merge_input_diffs and session.result_win and vim.api.nvim_buf_is_valid(session.result_bufnr)) then
+    return
+  end
+  lines = lines or vim.api.nvim_buf_get_lines(session.result_bufnr, 0, -1, false)
+  local options = require("codediff.ui.view.render").diff_options()
+  local base_to_result_diff = require("codediff.core.diff").compute_diff(session.merge_base_lines, lines, options)
+  if not base_to_result_diff then
+    return
+  end
+  require("codediff.ui.conflict.view.padding").render({
+    { win = session.original_win, buf = session.original_bufnr, diff = session.merge_input_diffs.base_to_original_diff },
+    { win = session.modified_win, buf = session.modified_bufnr, diff = session.merge_input_diffs.base_to_modified_diff },
+    { win = session.result_win, buf = session.result_bufnr, diff = base_to_result_diff },
+  }, #session.merge_base_lines)
+end
+
+--- Line up the other panes with `modified_win`. Native scrollbind keeps whatever offset the
+--- panes start with, and the inputs are scrolled to their first conflict and then resized
+--- (result split, winbars), which re-scrolls each pane independently.
+local function align_panes_to(modified_win, original_win, result_win)
+  local scroll_sync = require("codediff.ui.view.scroll_sync")
+  local panes = { modified_win, result_win }
+  if vim.api.nvim_win_is_valid(original_win) then
+    scroll_sync.align(modified_win, original_win)
+    panes[#panes + 1] = original_win
+  end
+  scroll_sync.align_with_cursor(modified_win, result_win)
+  for _, win in ipairs(panes) do
+    scroll_sync.reset_scrollbind_anchor(win)
+  end
 end
 
 -- Common logic: Setup conflict result window
@@ -165,15 +202,16 @@ function M.setup_conflict_result_window(tabpage, session_config, original_win, m
   -- Setup autocmd to refresh markers when the result buffer changes.
   conflict.setup_refresh_autocmd(tabpage, result_bufnr)
 
-  -- Initialize all conflict markers through the centralized renderer.
+  -- Initialize all conflict markers and pane padding through the centralized renderer.
   local session = lifecycle.get_session(tabpage)
   if session then
-    conflict.refresh(session)
+    M.render(session)
   end
 
   -- Return focus to modified window
   if vim.api.nvim_win_is_valid(modified_win) then
     vim.api.nvim_set_current_win(modified_win)
+    align_panes_to(modified_win, original_win, result_win)
   end
 
   return true

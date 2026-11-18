@@ -184,7 +184,7 @@ describe("conflict gutter lifecycle on the screen grid", function()
       return screen:exec("return vim.api.nvim_buf_line_count(...) == 3", { panes.result_buf })
     end)
     local rows = vim.deepcopy(fixture.merge_rows)
-    rows.result = { "before", "after", "tail" }
+    rows.result = { "before", "╱╱╱╱╱", "╱╱╱╱╱", "╱╱╱╱╱", "╱╱╱╱╱", "after", "tail" }
     expect_merge(rows, colors("Resolved", "Resolved", "Resolved"))
   end)
 
